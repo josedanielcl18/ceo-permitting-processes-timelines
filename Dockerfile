@@ -12,7 +12,7 @@ EXPOSE 5000
 WORKDIR /app
 
 # Copy the dependencies file to the working directory
-COPY requirements.txt . 
+COPY requirements.txt .
 
 # Install any dependencies
 RUN pip install -r requirements.txt --no-cache-dir
@@ -24,8 +24,8 @@ RUN pip install -r requirements.txt --no-cache-dir
 COPY . .
 
 # Specify the command to run on container start ----- "./app.py"
-CMD ["python3", "-m" , "flask", "run", "--host=0.0.0.0"]
-#CMD [ "gunicorn", "--workers=5", "--threads=5", "-b 0.0.0.0:5000", "app:server"]
+#CMD ["python3", "-m" , "flask", "run", "--host=0.0.0.0"]
+CMD [ "gunicorn", "--workers=6", "--threads=6", "-b 0.0.0.0:5000", "app:server"]
 
 #CMD ["python", "./app.py"]
 #CMD ["python", "./index.py"]
