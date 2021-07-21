@@ -21,6 +21,12 @@ external_stylesheets = [dbc.themes.BOOTSTRAP] #BOOTSTRAP, FLATLY, CYBORG, SLATE,
 app = Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True) #suppress_callback_exceptions=True
 #app = Dash(__name__, server=server, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True) #suppress_callback_exceptions=True
 
+from flask_caching import Cache
+cache = Cache(app.server, config={
+    'CACHE_TYPE': 'filesystem',
+    'CACHE_DIR': 'cache-directory'
+})
+
 # Validation
 VALID_USERNAME_PASSWORD_PAIRS = {
     'admin': 'cityofedmonton'

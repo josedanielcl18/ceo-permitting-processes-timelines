@@ -16,7 +16,6 @@ from datetime import date
 #plotly
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 #python modules
 from app import app
@@ -24,7 +23,7 @@ from app import app
 # Dataframes
 from .df_InProgress import df1, df2
 df2_IP = df2.copy() 
-
+from apps.app_BP_issued.df_BP_issued import df_duration as df_duration_issued
 #from .df_BP_issued import df_duration, df, df2
 
 # --------------------------------------------------------------------------------------------------------------------------------------
@@ -86,7 +85,7 @@ dropdown_target = dcc.Dropdown(
                             {'label':"'Enter Application' to 'Intake - First Instance'", 'value':"project_duration_Enter_to_Intake_fi"},
                             {'label':"'Intake - Last Instance' to 'PER - First Instance'", 'value':"project_duration_Intake_li_to_PER_fi"},
                         ],
-                        value="project_duration_Intake_li_to_PER_fi",
+                        value="project_duration",
                         style={'width':'50%'},
                         multi=False
                     )
@@ -207,15 +206,6 @@ card_inputs_issued = dbc.Card(
     inverse=False,
 )
 
-# Card Title
-card_title_issued_permits = dbc.Card(
-        [html.H2('Issued Permits...', style={'text-align':'center'}, className="card-title"),
-         html.P('All permits that have been already issued.', style={'text-align':'center'}, className="")],
-         body=True,
-         color="dark",
-         inverse=True,
-)
-
 # Cards for Pools Duration for Permits Issued
 card_fig_poolsDuration = dbc.Card(
                             [  html.H4('Permit Pools for Issued Applications!', className="card-title"),
@@ -231,8 +221,6 @@ card_fig_poolsDuration = dbc.Card(
                         )
 #card_fig_poolsDuration = DarkCard('Permit Pools for Issued Applications!', "Proccesing times.", 'figPoolsDuration')
 card_fig_AvgSpeedPools = DarkCard('Permit Pools KPIs!', "Based on issued permits.", 'figAvgSpeedPools')
-
-
 # Card for Avg. Resources by pool
 card_fig_AvgPERResourcesPools = DarkCard('Avg. Active Resources by Pool Type!', "Avg. active resources per week.", 'figAvgPERResourcesPools')
 # card_fig_AvgPERResourcesPools = dbc.Card(
@@ -256,7 +244,7 @@ card_title = dbc.Card(
 )
 
 # Card Plot Vol. of Applications
-card_fig_pools = Card('Permit Pools!', "Comparison.", 'figPools')
+card_fig_pools = DarkCard('Permit Pools!', "Comparison.", 'figPools')
 
 # Card Inputs: Permit Pools.
 card_inputs = dbc.Card(
@@ -317,7 +305,7 @@ card_KPIs_resources = dbc.Card(
      dbc.CardGroup([card_KPIs_text2])    
     ],
       body=True,
-      color="dark",
+      color="light",
       inverse=False,
 )
 
@@ -389,7 +377,7 @@ card_forecast_text1 = dbc.Card(
       html.H4('Avg. Processing Time:',  className="card-title"),
       html.H2(id='avg-duration',  className="card-text"),
       
-      html.P(children=[ html.Span('Based on last '),
+      html.P(children=[ html.Span('Based on ast '),
                         html.Span(id='slider-permits-text', style={'fontSize':40},),
                         html.Span(' permits issued...'),   
                       ] , style={'text-align':'left'},),
@@ -440,11 +428,8 @@ layout = html.Div([
                 html.Div([
                     # Inputs for Issued Permits
                     dbc.CardGroup([card_inputs_issued]),
-                    html.Br(),
                     # Pools for Issued Permits
-                    dbc.CardGroup([card_title_issued_permits]),
                     dbc.CardGroup([card_fig_poolsDuration, card_fig_AvgSpeedPools]),
-                    html.Br(),
                     # Title for Permits in Progress
                     dbc.CardGroup([card_title]),
                     # Volume and KPIs for Permits in Progress
@@ -455,7 +440,6 @@ layout = html.Div([
                     #3rd Row - 2 Cards
                     dbc.CardGroup([card2, card3]),
                     #4th Row - 1 Cards
-                    html.Br(),
                     dbc.CardGroup([card_forecast]),
                 ])
             ],
@@ -464,37 +448,65 @@ layout = html.Div([
 # --------------------------------------------------------------------------------------------------------------------------------------
 # CALLBACKS
 
-# Callbacks for ISSUED PERMITS
-from apps.app_BP_issued.df_BP_issued import df_duration as df_duration_issued
+from plotly.subplots import make_subplots
 
+# Connect the Plotly graphs with Dash Components
 @app.callback(
     [Output(component_id='figPoolsDuration', component_property='figure'), 
-     Output(component_id='figAvgSpeedPools', component_property='figure'),],
-
+    Output(component_id='figAvgSpeedPools', component_property='figure'),
+    Output(component_id='figAvgPERResourcesPools', component_property='figure'),
+    Output(component_id='figPools', component_property='figure'),
+    Output(component_id='KPIs-weeks', component_property='children'),
+    Output(component_id='gauge-volume', component_property='value'),
+    Output(component_id='gauge-duration', component_property='value'),
+    Output(component_id='gauge-permits-issued', component_property='children'),
+    Output(component_id='gauge-resources', component_property='children'),
+    Output(component_id='avg-rate', component_property='children'),
+    Output(component_id='gauge-newVol', component_property='children'),
+    Output(component_id='avg-duration', component_property='children'),
+    Output(component_id='figIP1', component_property='figure'),
+    Output(component_id='figIP2', component_property='figure'),
+    Output(component_id='figIP3', component_property='figure'),
+    Output(component_id='figIP4', component_property='figure'),
+    Output(component_id='slider-permits-text', component_property='children'),
+    Output(component_id='slider-weeks-text', component_property='children'),
+    Output(component_id='avg-duration-weeks', component_property='children'),],
+    
     [Input(component_id='date-picker-range-appIP', component_property='start_date'), #slider-permits-text
      Input(component_id='date-picker-range-appIP', component_property='end_date'),
      Input(component_id='regression-target-appIP', component_property='value'),
-     Input(component_id='data-points', component_property='value'),]
+     Input(component_id='data-points', component_property='value'),
+     Input(component_id='IPpool-name', component_property='value'),
+     Input(component_id='resources-team', component_property='value'),
+     Input(component_id='slider-weeks-kpis', component_property='value'),
+     Input(component_id='slider-permits', component_property='value'),
+     Input(component_id='slider-weeks', component_property='value')
+    ]
 )
-def update_graph_issued_permits(start_date, end_date, target_name, data_points,):
 
+#The arguments of the function depend on the number of inputs of the callback
+def update_graph(start_date, end_date, target_name, data_points, pool_name, process_name, slider_weeks_kpis, slider_permits, slider_weeks):
+    
     #Filter by Date Picker range
     df_duration = df_duration_issued.set_index('RECEIVEDDATE')
     df_duration = df_duration[start_date:end_date]
     JOBIDs_unique = df_duration['JOBID'].unique().tolist()
+      
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Before filtering by pool_name:
+    
+    # Plot Median duration of last 50 permits issued by pool_name
+    #temp = df_duration[df_duration['project_duration_Intake_li_to_PER_fi']<0]
+    #temp = temp[temp['pools']!='Residential P.: HIP']
+    #print(temp[['JOBID','project_duration_Intake_li_to_PER_fi']])
 
-    # 1
-    # Plot Processing times for different permit pools
     df_duration = df_duration[df_duration[target_name]>=0] # Remove applications with negative durations
     df_duration.sort_values(by='ISSUEDATE', ascending=False, inplace=True)
-
     figPoolsDuration = px.box(df_duration, x="pools", y=target_name, template='plotly_white', 
                               title='Avg. Processing Times') #histfunc="avg", points='all',
-    figPoolsDuration.update_traces(boxpoints=data_points,)
+    figPoolsDuration.update_traces(boxpoints=data_points, )
     figPoolsDuration.update_layout(title_x=0.5, xaxis={'categoryorder':'category ascending'})
 
-
-    # 2
     # Plot avg Speed of permits issued by pool_name
     from apps.app_BP_issued.df_BP_issued import df1 as df1_issued
     df1_issued = df1_issued[df1_issued['JOBID'].isin(JOBIDs_unique)]
@@ -517,72 +529,13 @@ def update_graph_issued_permits(start_date, end_date, target_name, data_points,)
 
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    
-
-    return figPoolsDuration, figAvgSpeedPools
-
-
-# Connect the Plotly graphs with Dash Components
-@app.callback(
-   [Output(component_id='figPools', component_property='figure'),
-    Output(component_id='figAvgPERResourcesPools', component_property='figure'),
-    Output(component_id='KPIs-weeks', component_property='children'),
-    Output(component_id='gauge-volume', component_property='value'),
-    Output(component_id='gauge-duration', component_property='value'),
-    Output(component_id='gauge-permits-issued', component_property='children'),
-    Output(component_id='gauge-resources', component_property='children'),
-    Output(component_id='avg-rate', component_property='children'),
-    Output(component_id='gauge-newVol', component_property='children'),
-    Output(component_id='avg-duration', component_property='children'),
-    Output(component_id='figIP1', component_property='figure'),
-    Output(component_id='figIP2', component_property='figure'),
-    Output(component_id='figIP3', component_property='figure'),
-    Output(component_id='figIP4', component_property='figure'),
-    Output(component_id='slider-permits-text', component_property='children'),
-    Output(component_id='slider-weeks-text', component_property='children'),
-    Output(component_id='avg-duration-weeks', component_property='children'),],
-    
-    [Input(component_id='date-picker-range-appIP', component_property='start_date'), #slider-permits-text
-     Input(component_id='date-picker-range-appIP', component_property='end_date'),
-     Input(component_id='regression-target-appIP', component_property='value'),
-     Input(component_id='IPpool-name', component_property='value'),
-     Input(component_id='resources-team', component_property='value'),
-     Input(component_id='slider-weeks-kpis', component_property='value'),
-     Input(component_id='slider-permits', component_property='value'),
-     Input(component_id='slider-weeks', component_property='value')
-    ]
-)
-
-#The arguments of the function depend on the number of inputs of the callback
-def update_graph(start_date, end_date, target_name, pool_name, process_name, slider_weeks_kpis, slider_permits, slider_weeks):
-    
-    #Filter by Date Picker range
-    df_duration = df_duration_issued.set_index('RECEIVEDDATE')
-    df_duration = df_duration[start_date:end_date]
-    JOBIDs_unique = df_duration['JOBID'].unique().tolist()
-      
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    # Before filtering by pool_name:
-
-    df_duration = df_duration[df_duration[target_name]>=0] # Remove applications with negative durations
-    df_duration.sort_values(by='ISSUEDATE', ascending=False, inplace=True)
-
-    # Plot avg Speed of permits issued by pool_name
-    from apps.app_BP_issued.df_BP_issued import df1 as df1_issued
-    df1_issued = df1_issued[df1_issued['JOBID'].isin(JOBIDs_unique)]
-    df1_index = df1_issued.set_index('ISSUEDATE')
-    pools_list = df1_index['pools'].unique().tolist()
-
-   
     # APPLICATIONS IN PROGRESS
 
     # Plot Volume of applications in progress by pool_name
     figPools = px.histogram(df1, x="JOBID", y='pools', orientation='h', histfunc="count", 
                             title='Volume of Applications')
     figPools.update_layout(title_x=0.5, yaxis={'categoryorder':'category descending'})
-
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+    
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     
@@ -685,7 +638,23 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
                           legend_traceorder="reversed",
                           xaxis_visible=True, xaxis_showticklabels=False,
                           )
+    #df_dic = pd.DataFrame()
+    #Transpose (T function) df and get values as dict to append to new df.
+    #dic =  df_status.groupby(['OBJECTDEFDESCRIPTION']).agg({'JOBID':'count'}).T.to_dict(orient='list')
+    #Append all info together
+    #df_dic = df_dic.append(pd.DataFrame(dic, index =[str(date.today())]))
 
+    # Figure 1: Stacked bar plot for status of applications. Source: df_dic.
+    #df_dic = df_dic.fillna(0)
+    #status_columns = ['Enter Application', 'Building Intake Review', 'More Info Requested - Intake', 'Info Received - Intake',
+    #                  'Plans Examination Review', 'More Info Requested - Plans Examination Review', 
+    #                  'More Info Requested - Plans Examination Notification', 'Info Received - Plans Examination Review']
+
+    #df_dic = df_dic[status_columns]
+    
+    #fig1 = px.bar(df_dic, x=df_dic.index, y=df_dic.columns)
+    
+    
     # -----------------------------------------------------------------------------
     # BAR PLOT STATUSDESCRIPTION
 
@@ -699,6 +668,15 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
                           yaxis_title='Volume of applications')
 
     # -----------------------------------------------------------------------------
+    # BOXPLOT FOR STATUS_DURATION VS STATUSDESCRIPTION
+
+    #Figure 3: Boxplot for status_duration vs STATUSDESCRIPTION. Source:
+    # fig3 = px.box(df1_fil, x='STATUSDESCRIPTION', y='project_duration')
+    # fig3.update_xaxes(categoryorder='array', categoryarray= df_statusdescription.index, 
+    #                   tickangle=40, automargin=True, tickwidth=0.5)
+    # fig3.add_trace(go.Scatter(x= df_statusdescription.index, y= df_statusdescription['STATUSDESCRIPTION'],
+    #                     mode='lines+markers', name='Volume', line=dict(color='darkblue', width=2)))
+
 
     df1_fil = df1_fil.merge(df_status[['JOBID', 'DATECOMPLETEDHOUR']], on='JOBID', how='left')
     df1_fil['status_duration'] = (df1_fil['DATECOMPLETEDHOUR'] - df1_fil['RECEIVEDDATE']).dt.days
@@ -745,7 +723,7 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
                           yaxis_title='Volume of applications')
     
     # return outputs
-    outputs = [figPools, figAvgPERResourcesPools,
+    outputs = [figPoolsDuration, figAvgSpeedPools, figAvgPERResourcesPools, figPools, 
                weeks_kpis_text, gauge_vol, gauge_duration, gauge_permits_issued, gauge_resources, avg_rate, gauge_newVol, avg_duration, 
                fig1, fig2, fig3, fig4, slider_permits_text, slider_weeks_text, avg_duration_weeks]
     
@@ -840,7 +818,6 @@ def SetFeatures(dataset, target_name):
         target_segment_text = 'Target segment: "Enter Application" to "Issue Date"'
 
     return dataset, features_team, features_queue, slider_resources_text, slider_rate_text, target_segment_text
-
 
 # Connect the Plotly graphs with Dash Components
 @app.callback(

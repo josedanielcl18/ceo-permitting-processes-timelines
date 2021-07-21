@@ -83,9 +83,11 @@ layout = html.Div([
                         #Title
                         html.H1("City of Edmonton Dashboard for Predictive Analytics", className="text-left"),
                         html.Br(),
-                        dbc.CardGroup([card1, card2]),
-                        dbc.CardGroup([card3, card4]),
-                        dbc.CardGroup([card5]),
+                        dbc.CardDeck([card1, card2]),
+                        html.Br(),
+                        dbc.CardDeck([card3, card4]),
+                        html.Br(),
+                        dbc.CardDeck([card5]),
                         #dbc.CardGroup([card1, card2]),
                         #3rd Row - 2 Cards
                         #dbc.CardGroup([card4, card5]),

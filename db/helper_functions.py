@@ -91,6 +91,7 @@ def GetStatus(df):
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'Job Status Correction') & (df['OUTCOME'] == 'Plans Exam Review - More Info Requested'), 'Status'] = "6.More Info Requested - Plans Examination Review"
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'Job Status Correction') & (df['OUTCOME'] == 'Plans Exam Review - Payment and More Inf'), 'Status'] = "6.More Info Requested - Plans Examination Review"
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'Job Status Correction') & (df['OUTCOME'] == 'Plans Exam Review - Payment Required'), 'Status'] = "6.More Info Requested - Plans Examination Review"
+  df.loc[(df['OBJECTDEFDESCRIPTION'] == 'Job Status Correction') & (df['OUTCOME'] == 'More Information Required/Requested'), 'Status'] = "6.More Info Requested - Plans Examination Review"
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'More Info Requested - Plans Examination Notification') & (df['OUTCOME'] == 'Review Final Notification'), 'Status'] = "6.More Info Requested - Plans Examination Review"
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'More Info Requested - Plans Examination Review') & (df['OUTCOME'] == 'From applicant'), 'Status'] = "6.More Info Requested - Plans Examination Review"
   df.loc[(df['OBJECTDEFDESCRIPTION'] == 'More Info Requested - Plans Examination Review') & (df['OUTCOME'] == 'From Applicant'), 'Status'] = "6.More Info Requested - Plans Examination Review"

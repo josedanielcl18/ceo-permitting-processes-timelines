@@ -77,7 +77,7 @@ dropdown_target = dcc.Dropdown(
                             {'label':"'Enter Application' to 'Intake - First Instance'", 'value':"project_duration_Enter_to_Intake_fi"},
                             {'label':"'Intake - Last Instance' to 'PER - First Instance'", 'value':"project_duration_Intake_li_to_PER_fi"},
                         ],
-                        value="project_duration",
+                        value="project_duration_Intake_li_to_PER_fi",
                         style={'width':'50%'},
                         multi=False
                     )
@@ -96,7 +96,8 @@ dropdown_features = dcc.Dropdown(
                         options=[
                             {'label':feature, 'value':feature} for feature in features
                         ],
-                        value=['productivityINTAKE', 'productivityPER', 'new_applications', 'issued_applications'],
+                        value=['productivityPER', "2.Intake - Payment and/or More Info Requested", 
+                               "3.With DO or Pending Planning and Zoning Review", "4.To Be Assigned"],
                         multi=True
                     )
 
@@ -222,7 +223,7 @@ layout = html.Div([
 # Regression Model Functions
 
 from sklearn import linear_model
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 import numpy as np
 
 def FitModel(train, features, target):
@@ -239,11 +240,17 @@ def Forecast(test, features, target, fitmodel):
     X = np.asanyarray(test[features])
     Y = np.asanyarray(test[target])
 
-    mse = np.sqrt(mean_squared_error(Y, y_hat))
+    #rmse = np.sqrt(mean_squared_error(Y, y_hat))
+    #mae = round(np.mean(np.abs((Y - y_hat)/Y)), 2)
+    mae = round(mean_absolute_error(Y, y_hat), 2)
     #print('The Root Mean Squared Error of our forecasts is {}'.format(round(mse)))
     # Explained variance score: 1 is perfect prediction
     #print('Variance score: %.2f' % regr.score(X, Y))
-    return Y, y_hat, mse
+    return Y, y_hat, mae
+
+def MAPE(Y_actual,Y_Predicted):
+    mape = round(mean_absolute_percentage_error(Y_actual, Y_Predicted)*100, 2)
+    return mape
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 #Helper function to filer dataframe
@@ -441,10 +448,10 @@ def update_graph(start_date, end_date, pool_name, MIR_Status, target_name, featu
     regr, regr.coef_ = FitModel(train, features, target)
 
     # Forecast
-    Y, yhat, mse = Forecast(test, features, target, regr)
+    Y, yhat, error = Forecast(test, features, target, regr)
     df_yhat = pd.DataFrame(yhat.tolist(), columns=['forecast'])
 
-    fig2 = px.scatter(df_yhat, x=test.index, y=df_yhat['forecast'].values, title='Mean Squared Error: {} days'.format(str(round(mse))))
+    fig2 = px.scatter(df_yhat, x=test.index, y=df_yhat['forecast'].values, title='Mean Absolute Error: {} days'.format(str(round(error))))
     fig2.update_traces(marker=dict(color='green', size=11), selector=dict(mode='markers'), marker_symbol="star")
     fig2.add_trace(go.Scatter(x= test.index, y= test[target_name].values,
                          mode='markers', name='Real observations', marker_symbol="star-diamond",
@@ -468,16 +475,18 @@ def update_graph(start_date, end_date, pool_name, MIR_Status, target_name, featu
     test_size = int(len(dataset) * 0.2)
     test_last_period = dataset.tail(test_size)
     # Forecast
-    Y, yhat, mse = Forecast(test_last_period, features, target, regr)
+    Y, yhat, error = Forecast(test_last_period, features, target, regr)
+    mape = MAPE(Y,yhat) # MEAN ABSOLUTE PERCENTAGE ERROR
+
     df_yhat = pd.DataFrame(yhat.tolist(), columns=['forecast'])
-    
+    title = "Mean Absolute Percentage Error: " + str(mape) + "%"
     fig4 = px.line(dataset, x=dataset.index, y=[target_name, feature1], 
-                   title='Forecast vs. Real Observations vs. Features')
+                   title=title)
     fig4.add_trace(go.Scatter(x=test_last_period.index, y=df_yhat.forecast,
                     mode='lines+markers',
                     name='Forecast', line=dict(color='darkgreen', width=2)))
     fig4.update_layout(template='plotly_white',
-                      title_x=0.3,
+                      #title_x=0.3,
                       xaxis_title='Received Week',
                       legend_title='',
                       legend=dict(orientation="h",
