@@ -23,10 +23,13 @@ RUN pip install -r requirements.txt --no-cache-dir
 #COPY . /app
 COPY . .
 
-# Specify the command to run on container start ----- "./app.py"
-#CMD ["python3", "-m" , "flask", "run", "--host=0.0.0.0"]
-CMD [ "gunicorn", "--workers=6", "--threads=6", "-b 0.0.0.0:5000", "app:server"]
+# Specify the command to run on container start"
+# For debugging:
+#CMD ["python3", "-m" , "flask", "run", "--host=0.0.0.0"] 
+# For production:
+CMD [ "gunicorn", "--workers=5", "--threads=5", "-b 0.0.0.0:5000", "app:server"] 
 
+#IGNORE
 #CMD ["python", "./app.py"]
 #CMD ["python", "./index.py"]
 #CMD gunicorn --bind 0.0.0.0:5000 wsgi
