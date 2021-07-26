@@ -4,15 +4,14 @@ import pandas as pd
 
 # Import dfs
 #from db.df_preprocessing import df1, df2
-from db.df_preprocessing import getData, dataPreprocessing
+from db.df_preprocessing import getPreprocessedData
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 # Preprocess Data to plot Statuses
 
 def getStatusesData(file_location_1, file_location_2):
 
-    df1, df2 = getData(file_location_1, file_location_2) 
-    df1, df2 = dataPreprocessing(df1, df2)
+    df1, df2 = getPreprocessedData(file_location_1, file_location_2) 
 
     # Filter Building permits
     BP_pools = ['Commercial P.: Interior/Others', 'Commercial P.: New/Addition', 'Residential P.: Single Detached',
