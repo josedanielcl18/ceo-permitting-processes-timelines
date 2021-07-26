@@ -68,20 +68,17 @@ app.layout = html.Div([dcc.Location(id="url"), sidebar, content])
 from apps import home
 from apps.app_InProgress import appInProgress
 from apps.app_statuses import appStatuses
-from apps.app_MIRstatus import appMIRstatus
-from apps.app_ModelDevelopment import appRegressionBP
-
-#from apps.app_BP_issued import appBPissued, appRegressionBP
-#from apps import appBPissued
-#from templates.app_GoogleData import testGoogleData
-#from templates.app_InProgress import appInProgress
-#from templates.app_BP_issued import appBPissued, appRegressionBP
+#from apps.app_MIRstatus import appMIRstatus
+#from apps.app_ModelDevelopment import appRegressionBP
 
 # Callbacks to render pages
 @app.callback(Output('page-content', 'children'),
               Input('url', 'pathname'))
 
 def display_page(pathname):
+    #from apps.app_InProgress import appInProgress
+    #from apps.app_statuses import appStatuses
+
     if pathname == '/':
         return home.layout
     #elif pathname == '/app1':
@@ -89,17 +86,17 @@ def display_page(pathname):
     # elif pathname == '/app2':
     #      return app2.layout
     elif pathname == '/statuses':
-         return appStatuses.layout
+        return appStatuses.layout
     # elif pathname == '/GoogleData':
     #       return appGoogleData.layout
     elif pathname == '/appInProgress':
-          return appInProgress.layout
-    #elif pathname == '/':
-    #     return appBPissued.layout
-    elif pathname == '/MIRstatus':
-         return appMIRstatus.layout
-    elif pathname == '/appRegressionBP':
-          return appRegressionBP.layout
+        return appInProgress.layout
+    # #elif pathname == '/':
+    # #     return appBPissued.layout
+    # elif pathname == '/MIRstatus':
+    #      return appMIRstatus.layout
+    # elif pathname == '/appRegressionBP':
+    #       return appRegressionBP.layout
     else:
         return '404'
 

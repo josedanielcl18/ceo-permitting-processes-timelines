@@ -15,11 +15,16 @@ from datetime import date
 import plotly.express as px
 #import plotly.graph_objects as go
 
-from .df_statuses import df2_fil
-# Resample df to get weeks.
-df_index = df2_fil.set_index('DATECOMPLETEDHOUR')
-df2_weekIndex =  df_index.resample('W').agg({"JOBID":'count'})
-weeks = df2_weekIndex.index.tolist()
+#from .df_statuses import df2_fil
+# from db.df_preprocessing import file_location_1, file_location_2
+# from .df_statuses import getStatusesData
+# df2_fil = getStatusesData(file_location_1, file_location_2)
+
+# # Resample df to get weeks.
+# df_index = df2_fil.set_index('DATECOMPLETEDHOUR')
+# df2_weekIndex =  df_index.resample('W').agg({"JOBID":'count'})
+# weeks = df2_weekIndex.index.tolist()
+
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 #Functions to Create Bootstrap Cards
@@ -39,7 +44,8 @@ def Card(title, subtitle, fig):
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 # Dropdown for pools of applications/permits
-pools = df2_fil['pools'].unique().tolist()
+#pools = df2_fil['pools'].unique().tolist()
+pools = ['Commercial P.: Interior/Others' , 'Commercial P.: New/Addition']
 dropdown_pools = dcc.Dropdown(id='pool-name-statuses',
                               options=[
                               {'label': '{}'.format(i), 'value': i} for i in pools
@@ -93,8 +99,17 @@ import json
 #TIMEOUT=180
 @cache.memoize(timeout=0)
 def transform_data():
+   
     # This could be an expensive data querying step
+    from db.df_preprocessing import file_location_1, file_location_2
+    from .df_statuses import getStatusesData
+    df2_fil = getStatusesData(file_location_1, file_location_2)
     
+    # Resample df to get weeks.
+    df_index = df2_fil.set_index('DATECOMPLETEDHOUR')
+    df2_weekIndex =  df_index.resample('W').agg({"JOBID":'count'})
+    weeks = df2_weekIndex.index.tolist()
+
     # Data pre-processing for figure "Statuses of Applications". Source: df2_fil.
     datasets = {}
     for pool_name in pools:

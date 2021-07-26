@@ -22,10 +22,12 @@ from plotly.subplots import make_subplots
 from app import app
 
 # Dataframes
-from .df_InProgress import df1, df2
-df2_IP = df2.copy() 
+#from .df_InProgress import df1, df2
+# from db.df_preprocessing import file_location_1, file_location_2
+# from .df_InProgress import getPermitsInProgressData
+# df1, df2_IP = getPermitsInProgressData(file_location_1, file_location_2)
+#df2_IP = df2.copy() 
 
-#from .df_BP_issued import df_duration, df, df2
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 #Functions to Create Bootstrap Cards
@@ -102,8 +104,8 @@ data_points = dcc.RadioItems(
     labelStyle={'display': 'inline-block'}
 )  
 # Dropdown for pools of applications
-pools = df1['pools'].unique().tolist()
-
+#pools = df1['pools'].unique().tolist()
+pools = ['Commercial P.: Interior/Others', 'Commercial P.: New/Addition']
 dropdown_pools = dcc.Dropdown(id='IPpool-name',
                               options=[
                               {'label': '{}'.format(i), 'value': i} for i in pools
@@ -256,7 +258,7 @@ card_title = dbc.Card(
 )
 
 # Card Plot Vol. of Applications
-card_fig_pools = Card('Permit Pools!', "Comparison.", 'figPools')
+card_fig_pools = Card('Permit Pools!', "Comparison.", 'figVolumeByPools')
 
 # Card Inputs: Permit Pools.
 card_inputs = dbc.Card(
@@ -276,7 +278,7 @@ card_KPIs_text1 = dbc.Card(
     [ html.P('Select team:'),
       resources_team,
       html.Br(),
-      html.H2(id='KPIs-weeks', className="card-title"),
+      html.H2(id='weeks_kpis_title', className="card-title"),
       html.Br(),
       slider_weeks_KPIs,
       html.P(children=[ html.Strong('Avg. resources: ', style={'fontSize':20},),
@@ -296,12 +298,12 @@ card_KPIs_text1 = dbc.Card(
 card_KPIs_text2 = dbc.Card(
     [  
       html.P(children=[ html.Strong('Avg. Permits Issued: ', style={'fontSize':20},),
-                        html.Span(id='gauge-permits-issued', style={'fontSize':40},),
+                        html.Span(id='avg-permits-issued', style={'fontSize':40},),
                         html.Span(' permits issued per week.'),   
                       ]),
       
       html.P(children=[ html.Strong('Avg. new apps. received: ', style={'fontSize':20},),
-                        html.Span(id='gauge-newVol', style={'fontSize':40},),
+                        html.Span(id='avg-newVol', style={'fontSize':40},),
                         html.Span(' new apps. received per week.'),   
                       ]),
     ],
@@ -333,13 +335,14 @@ card_KPIs = dbc.Card(
 
 
 # Card 1
-card1 = Card('Status of Applications!', "Based on last process completed in Processes table.", 'figIP1')
+card1 = Card('Status of Applications!', "Based on last process completed in Processes table.", 'figStatusIP')
 # Card 2
-card2 = Card('Status Description!', "Based on STATUSDESCRIPTION column in Projects table.", 'figIP2')
+card2 = Card('Status Description!', "Based on STATUSDESCRIPTION column in Projects table.", 'figStatusDescription')
 # Card 3
-card3 = Card('Current duration vs Status Description!', "The line represents the volume of applications.", 'figIP3')
+card3 = Card('Duration of applications in certain status!', 
+              "The y-axis indicates the duration from 'Received Date' until last process update for the group of applications in progress under the specified status. The line represents the volume of applications.", 'figStatusDuration')
 # Card 4
-card4 = Card('Queue of Applications In Progress!', "Shows the queue of applications week by week.", 'figIP4')
+card4 = Card('Queue of Applications In Progress!', "Shows the queue of applications week by week.", 'figVolByWeek')
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------
@@ -461,50 +464,64 @@ layout = html.Div([
             ],
 )
 
+
+
 # --------------------------------------------------------------------------------------------------------------------------------------
 # CALLBACKS
 
+import json
+from db.df_preprocessing import getPreprocessedData, file_location_1, file_location_2
+
+# --------------------------------------------------------------------------------------------------------------------------------------
 # Callbacks for ISSUED PERMITS
-from apps.app_BP_issued.df_BP_issued import df_duration as df_duration_issued
+
+#from apps.app_BP_issued.df_BP_issued import df_duration as df_duration_issued
+from apps.app_BP_issued.df_BP_issued import getPermitsIssuedAsJson
 
 @app.callback(
     [Output(component_id='figPoolsDuration', component_property='figure'), 
      Output(component_id='figAvgSpeedPools', component_property='figure'),],
 
-    [Input(component_id='date-picker-range-appIP', component_property='start_date'), #slider-permits-text
+    [Input(component_id='date-picker-range-appIP', component_property='start_date'), 
      Input(component_id='date-picker-range-appIP', component_property='end_date'),
      Input(component_id='regression-target-appIP', component_property='value'),
      Input(component_id='data-points', component_property='value'),]
 )
 def update_graph_issued_permits(start_date, end_date, target_name, data_points,):
 
-    #Filter by Date Picker range
-    df_duration = df_duration_issued.set_index('RECEIVEDDATE')
-    df_duration = df_duration[start_date:end_date]
-    JOBIDs_unique = df_duration['JOBID'].unique().tolist()
+    # Import issued data
+    datasets = json.loads(getPermitsIssuedAsJson(file_location_1, file_location_2))
 
-    # 1
+    # Load df_duration_issued
+    df_duration_issued = pd.read_json(datasets["df_duration_issued"], convert_dates=['RECEIVEDDATE'], orient='split')
+    
+    #Filter data by Date Picker range
+    df_duration_received_index = df_duration_issued.set_index('RECEIVEDDATE')
+    filtered_df_duration_issued = df_duration_received_index[start_date:end_date]
+    JOBIDs_unique = filtered_df_duration_issued['JOBID'].unique().tolist()
+
+
     # Plot Processing times for different permit pools
-    df_duration = df_duration[df_duration[target_name]>=0] # Remove applications with negative durations
-    df_duration.sort_values(by='ISSUEDATE', ascending=False, inplace=True)
+    filtered_df_duration_issued = filtered_df_duration_issued[filtered_df_duration_issued[target_name]>=0] # Remove applications with negative durations
+    filtered_df_duration_issued.sort_values(by='ISSUEDATE', ascending=False, inplace=True)
 
-    figPoolsDuration = px.box(df_duration, x="pools", y=target_name, template='plotly_white', 
+    figPoolsDuration = px.box(filtered_df_duration_issued, x="pools", y=target_name, template='plotly_white', 
                               title='Avg. Processing Times') #histfunc="avg", points='all',
     figPoolsDuration.update_traces(boxpoints=data_points,)
     figPoolsDuration.update_layout(title_x=0.5, xaxis={'categoryorder':'category ascending'})
 
 
-    # 2
     # Plot avg Speed of permits issued by pool_name
-    from apps.app_BP_issued.df_BP_issued import df1 as df1_issued
-    df1_issued = df1_issued[df1_issued['JOBID'].isin(JOBIDs_unique)]
-    #df1_issued = df1_issued.set_index('RECEIVEDDATE')
-    #df1_issued = df1_issued[start_date:end_date]
-    df1_index = df1_issued.set_index('ISSUEDATE')
+    # Load df1_issued
+    df1_issued = pd.read_json(datasets["df1_issued"], convert_dates=['ISSUEDATE'], orient='split')
+    
+    filtered_df1_issued = df1_issued[df1_issued['JOBID'].isin(JOBIDs_unique)]
+    filtered_df1_issued_index = filtered_df1_issued.set_index('ISSUEDATE')
+    
     avg_speeds={}
-    pools_list = df1_index['pools'].unique().tolist()
+    pools_list = filtered_df1_issued_index['pools'].unique().tolist()
     for pool in pools_list:
-        df_speed = df1_index[df1_index['pools'] == pool].resample('w').agg({'JOBID':'nunique'}).sort_values(by='ISSUEDATE', ascending=False)
+        df_speed = filtered_df1_issued_index[filtered_df1_issued_index['pools'] == pool].resample('w').agg({'JOBID':'nunique'}).sort_values(by='ISSUEDATE', ascending=False)
         avg_speeds[pool] = round(df_speed['JOBID'].mean())
     
     df_avg_speeds = pd.DataFrame.from_dict(avg_speeds, orient='index',columns=['avg_speed'])
@@ -516,111 +533,136 @@ def update_graph_issued_permits(start_date, end_date, target_name, data_points,)
     
 
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    
-
     return figPoolsDuration, figAvgSpeedPools
 
+# --------------------------------------------------------------------------------------------------------------------------------------
+# CALLBACK FOR AVG NEW VOLUME OF APPLICATIONS. Data: all permits received.
 
-# Connect the Plotly graphs with Dash Components
 @app.callback(
-   [Output(component_id='figPools', component_property='figure'),
-    Output(component_id='figAvgPERResourcesPools', component_property='figure'),
-    Output(component_id='KPIs-weeks', component_property='children'),
-    Output(component_id='gauge-volume', component_property='value'),
-    Output(component_id='gauge-duration', component_property='value'),
-    Output(component_id='gauge-permits-issued', component_property='children'),
-    Output(component_id='gauge-resources', component_property='children'),
-    Output(component_id='avg-rate', component_property='children'),
-    Output(component_id='gauge-newVol', component_property='children'),
-    Output(component_id='avg-duration', component_property='children'),
-    Output(component_id='figIP1', component_property='figure'),
-    Output(component_id='figIP2', component_property='figure'),
-    Output(component_id='figIP3', component_property='figure'),
-    Output(component_id='figIP4', component_property='figure'),
-    Output(component_id='slider-permits-text', component_property='children'),
-    Output(component_id='slider-weeks-text', component_property='children'),
-    Output(component_id='avg-duration-weeks', component_property='children'),],
-    
-    [Input(component_id='date-picker-range-appIP', component_property='start_date'), #slider-permits-text
-     Input(component_id='date-picker-range-appIP', component_property='end_date'),
-     Input(component_id='regression-target-appIP', component_property='value'),
-     Input(component_id='IPpool-name', component_property='value'),
-     Input(component_id='resources-team', component_property='value'),
-     Input(component_id='slider-weeks-kpis', component_property='value'),
-     Input(component_id='slider-permits', component_property='value'),
-     Input(component_id='slider-weeks', component_property='value')
-    ]
+    Output(component_id='avg-newVol', component_property='children'),
+    [Input(component_id='IPpool-name', component_property='value'),
+     Input(component_id='slider-weeks-kpis', component_property='value'),]
 )
+def update_avg_new_volume(pool_name, slider_weeks_kpis):
 
-#The arguments of the function depend on the number of inputs of the callback
-def update_graph(start_date, end_date, target_name, pool_name, process_name, slider_weeks_kpis, slider_permits, slider_weeks):
+    # Import all data preprocessed
+    df1_preprocessed_all_data = getPreprocessedData(file_location_1, file_location_2)[0]
     
-    #Filter by Date Picker range
-    df_duration = df_duration_issued.set_index('RECEIVEDDATE')
-    df_duration = df_duration[start_date:end_date]
-    JOBIDs_unique = df_duration['JOBID'].unique().tolist()
-      
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    # Before filtering by pool_name:
-
-    df_duration = df_duration[df_duration[target_name]>=0] # Remove applications with negative durations
-    df_duration.sort_values(by='ISSUEDATE', ascending=False, inplace=True)
-
-    # Plot avg Speed of permits issued by pool_name
-    from apps.app_BP_issued.df_BP_issued import df1 as df1_issued
-    df1_issued = df1_issued[df1_issued['JOBID'].isin(JOBIDs_unique)]
-    df1_index = df1_issued.set_index('ISSUEDATE')
-    pools_list = df1_index['pools'].unique().tolist()
-
-   
-    # APPLICATIONS IN PROGRESS
-
-    # Plot Volume of applications in progress by pool_name
-    figPools = px.histogram(df1, x="JOBID", y='pools', orientation='h', histfunc="count", 
-                            title='Volume of Applications')
-    figPools.update_layout(title_x=0.5, yaxis={'categoryorder':'category descending'})
-
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    #datasets = json.loads(getPreprocessedDataAsJson(file_location_1, file_location_2))
+    # Load df1_preProcessed (contains all data for Projects)
+    # df1_preprocessed_all_data = pd.read_json(datasets["df1_preProcessed"], convert_dates=['RECEIVEDDATE'], orient='split')
     
-    # Filter tables by pool_name
-    df1_fil = df1[df1['pools']==pool_name]
-    JOBIDs_df1_fil = df1_fil['JOBID'].unique().tolist() # Unique Applications in progress.
-    df2_fil =  df2_IP[df2_IP['JOBID'].isin(JOBIDs_df1_fil)] # Match JOBIDs in Projects with Processes table.
+    # Filter data by pool_name and set 'RECEIVEDDATE' as index
+    filtered_df1_preprocessed_all_data = df1_preprocessed_all_data[df1_preprocessed_all_data['pools']==pool_name]
+    filtered_df1_received_index = filtered_df1_preprocessed_all_data.set_index('RECEIVEDDATE')
     
-    #Gauge 1: Volume of Applications in progress.
-    gauge_vol = len(JOBIDs_df1_fil)
+    # Avg. vol.of New Applications Received in last X weeks.
+    df_newVol = filtered_df1_received_index.resample('w').agg({"JOBID":'nunique'})
+    avg_newVol = str(round(df_newVol.tail(slider_weeks_kpis)['JOBID'].mean()))
 
-    #Gauge 2: Median duration of last 50 permits issued.
-    slider_permits_text = str(slider_permits)
-    slider_weeks_text = str(slider_weeks)
-    df_duration_fil = df_duration[df_duration['pools']==pool_name].sort_values(by='ISSUEDATE', ascending=False)
-    gauge_duration = df_duration_fil.head(50)[target_name].median()
-    avg_duration = str(df_duration_fil.head(slider_permits)[target_name].median()) + ' days' # based on input # of permits
+    return avg_newVol
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------
+
+# CALLBACKS FOR PROCESSING TIMES. Data: PERMITS ISSUED
+
+@app.callback(
+    [Output(component_id='gauge-duration', component_property='value'),
+     Output(component_id='avg-duration', component_property='children'),
+     Output(component_id='avg-duration-weeks', component_property='children'),
+     Output(component_id='avg-permits-issued', component_property='children'),
+     Output(component_id='weeks_kpis_title', component_property='children'),
+     Output(component_id='slider-permits-text', component_property='children'),
+     Output(component_id='slider-weeks-text', component_property='children'),],
+
+    [Input(component_id='IPpool-name', component_property='value'),
+     Input(component_id='regression-target-appIP', component_property='value'),
+     Input(component_id='slider-permits', component_property='value'),
+     Input(component_id='slider-weeks', component_property='value'),
+     Input(component_id='slider-weeks-kpis', component_property='value'),]
+)
+def update_processing_times(pool_name, target_name, slider_permits, slider_weeks, slider_weeks_kpis):
+
+    # Import issued data
+    datasets = json.loads(getPermitsIssuedAsJson(file_location_1, file_location_2))
+
+    # Load df_duration_issued
+    df_duration_issued = pd.read_json(datasets["df_duration_issued"], convert_dates=['ISSUEDATE'], orient='split')
     
-    #Gauge 3: Avg. speed last 12 weeks (avg. permits issued per week).
-    weeks_kpis_text = 'KPIs for last ' + str(slider_weeks_kpis) + ' weeks'
-    df_issued_index = df_duration_fil.set_index('ISSUEDATE')
-    df_speed = df_issued_index.resample('w').agg({'JOBID':'nunique', target_name:'median'}).sort_values(by='ISSUEDATE', ascending=False)
-    gauge_permits_issued = str(round(df_speed.head(slider_weeks_kpis)['JOBID'].mean()))
+    # Filter df_duration_issued by pool_name and sort by "ISSUEDATE"
+    filtered_df_duration_issued = df_duration_issued[df_duration_issued['pools']==pool_name].sort_values(by='ISSUEDATE', ascending=False)
+    JOBIDs_unique = filtered_df_duration_issued['JOBID'].unique().tolist()
+
+    #Gauge: Median duration of last 50 permits issued.
+    gauge_duration_last_50 = filtered_df_duration_issued.head(50)[target_name].median()
+    
+    # Avg. Processin Time based on slider input: last # of permits issued.
+    avg_duration_byNoWeeks = str(filtered_df_duration_issued.head(slider_permits)[target_name].median()) + ' days' 
+
+    # Set "ISSUEDATE" as index
+    filtered_df_duration_issued_index = filtered_df_duration_issued.set_index('ISSUEDATE')
+    
+    # Resample df_duration_issued_index by week to estimate avg. number of permits issued and median processing times
+    df_speed = filtered_df_duration_issued_index.resample('w').agg({'JOBID':'nunique', target_name:'median'}).sort_values(by='ISSUEDATE', ascending=False)
     
     # AVG duration of permits issued in the last X weeks
     avg_duration_weeks = str(round(df_speed.head(slider_weeks)[target_name].mean())) + ' days'
 
+    #Avg. productivity in last X weeks (avg. permits issued per week).
+    avg_permits_issued_inLastWeeks = str(round(df_speed.head(slider_weeks_kpis)['JOBID'].mean()))
 
+    # Title message for weeks kpi slider
+    weeks_kpis_title = 'KPIs for last ' + str(slider_weeks_kpis) + ' weeks'
+    
+    outputs = [gauge_duration_last_50, avg_duration_byNoWeeks, avg_duration_weeks, 
+               avg_permits_issued_inLastWeeks, weeks_kpis_title, str(slider_permits), str(slider_weeks)]
+    
+    return outputs
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------
+# Callbacks for PERMITS ISSUED: Resources information
+
+# Connect the Plotly graphs with Dash Components
+@app.callback(
+   [Output(component_id='figAvgPERResourcesPools', component_property='figure'),
+    Output(component_id='gauge-resources', component_property='children'),
+    Output(component_id='avg-rate', component_property='children'),],
+   
+   [Input(component_id='date-picker-range-appIP', component_property='start_date'), 
+    Input(component_id='date-picker-range-appIP', component_property='end_date'),
+    Input(component_id='IPpool-name', component_property='value'),
+    Input(component_id='resources-team', component_property='value'),
+    Input(component_id='slider-weeks-kpis', component_property='value'),]
+)
+
+#The arguments of the function depend on the number of inputs of the callback
+def update_resources(start_date, end_date, pool_name, process_name, slider_weeks_kpis):
+
+    # Import issued data
+    datasets = json.loads(getPermitsIssuedAsJson(file_location_1, file_location_2))
+
+    # Load df_duration_issued
+    df2_issued = pd.read_json(datasets["df2_issued"], convert_dates=['RECEIVEDDATE', 'DATECOMPLETEDHOUR'], orient='split')
+    
+    #Filter data by Date Picker range
+    df2_issued_received_index = df2_issued.set_index('RECEIVEDDATE')
+    df2_issued_received_index = df2_issued_received_index.sort_index()
+    filtered_df2_issued = df2_issued_received_index[start_date:end_date]
+
+    
     # Estimate AVG PER RESOURCES PER WEEK
-    from apps.app_BP_issued.df_BP_issued import df2 as df2_issued
-    # Filter by selected dates using JOBIDs_unique
-    df2_issued = df2_issued[df2_issued['JOBID'].isin(JOBIDs_unique)]
+
     #Filter by process name to estimate active resources at PER stage
     #process = 'Plans Examination Review'
-    df2_per = df2_issued[df2_issued['OBJECTDEFDESCRIPTION']==process_name]   
+    df2_per = filtered_df2_issued[filtered_df2_issued['OBJECTDEFDESCRIPTION']==process_name]   
     #Set index using 'DATECOMPLETEDHOUR' to retrieve processes and resources by datecompleted
     df2_peri = df2_per.set_index('DATECOMPLETEDHOUR')
+    
     avg_perResources={} # Empty dict to append results
+    # Get pools list
+    pools_list = filtered_df2_issued['pools'].unique().tolist()
     for pool in pools_list:
         df_perResources = df2_peri[df2_peri['pools'] == pool].resample('w').agg({'COMPLETEDBY':'nunique'}).sort_index(ascending=False)
         avg_perResources[pool] = round(df_perResources['COMPLETEDBY'].mean())
@@ -639,22 +681,63 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
 
 
     # Gauge Resources
-    df2_issued = df2_issued[df2_issued['pools']==pool_name].sort_values(by='DATECOMPLETEDHOUR', ascending=False)
-    #process = 'Plans Examination Review'
-    df2_per = df2_issued[df2_issued['OBJECTDEFDESCRIPTION']==process_name]
-    df2_peri = df2_per.set_index('DATECOMPLETEDHOUR')
-    df2_resources = df2_peri.groupby([pd.Grouper(freq='w')]).agg({"COMPLETEDBY": "nunique", "JOBID": "nunique"})
+    df2_peri_by_pool = df2_peri[df2_peri['pools']==pool_name].sort_index(ascending=False)
+    df2_resources = df2_peri_by_pool.groupby([pd.Grouper(freq='w')]).agg({"COMPLETEDBY": "nunique", "JOBID": "nunique"})
     resources = round(df2_resources.tail(slider_weeks_kpis)['COMPLETEDBY'].mean())
-    gauge_resources = str(resources)
+    avg_resources = str(resources)
     avg_productivity = round(df2_resources.tail(slider_weeks_kpis)['JOBID'].mean()) #unique permits reviewed per week
+    #print(df2_resources.tail(slider_weeks_kpis)['JOBID'])
     #avg_rate = str(avg_productivity)
     avg_rate = str(int(avg_productivity/resources))
+    
+    outputs = [figAvgPERResourcesPools, avg_resources, avg_rate]
+    
+    return outputs
 
 
-    #Gauge 5: Avg. vol.of New Applications Received in last 12 weeks.
-    df_newVol = df_duration_fil.resample('w').agg({"JOBID":'nunique'})
-    #print(df_newVol.tail(20))
-    gauge_newVol = str(round(df_newVol.tail(12)['JOBID'].mean()))
+
+# --------------------------------------------------------------------------------------------------------------------------------------
+# Callbacks for PERMITS IN PROGRESS
+
+from .df_InProgress import getPermitsInProgressAsJson
+
+# Connect the Plotly graphs with Dash Components
+@app.callback(
+   [Output(component_id='figVolumeByPools', component_property='figure'),
+    Output(component_id='gauge-volume', component_property='value'),
+    Output(component_id='figStatusIP', component_property='figure'),
+    Output(component_id='figStatusDescription', component_property='figure'), 
+    Output(component_id='figStatusDuration', component_property='figure'),
+    Output(component_id='figVolByWeek', component_property='figure'),],
+
+    Input(component_id='IPpool-name', component_property='value'),
+)
+
+#The arguments of the function depend on the number of inputs of the callback
+def update_graph_permits_in_progress(pool_name):
+
+    # Import Permits in progress
+    datasets = json.loads(getPermitsInProgressAsJson(file_location_1, file_location_2))
+
+    # Load df1_inProgress & df2_inProgress
+    df1_inProgress = pd.read_json(datasets["df1_inProgress"], convert_dates=['RECEIVEDDATE', 'DATECOMPLETEDHOUR'], orient='split')
+    df2_inProgress = pd.read_json(datasets["df2_inProgress"], convert_dates=['RECEIVEDDATE', 'DATECOMPLETEDHOUR'], orient='split')
+
+
+    # Plot Volume of applications in progress by pool_name
+    figVolumeByPools = px.histogram(df1_inProgress, x="JOBID", y='pools', orientation='h', histfunc="count", 
+                            title='Volume of Applications')
+    figVolumeByPools.update_layout(title_x=0.5, yaxis={'categoryorder':'category descending'})
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    # Filter permits in progress by pool_name
+    filtered_df1_IP = df1_inProgress[df1_inProgress['pools']==pool_name]
+    JOBIDs_filtered_df1_IP = filtered_df1_IP['JOBID'].unique().tolist() # Unique Applications in progress.
+    filtered_df2_IP =  df2_inProgress[df2_inProgress['JOBID'].isin(JOBIDs_filtered_df1_IP)] # Match JOBIDs in Projects with Processes table.
+    
+    #Gauge 1: Volume of Applications in progress.
+    gauge_vol = len(JOBIDs_filtered_df1_IP)
 
 
     # -----------------------------------------------------------------------------
@@ -663,12 +746,13 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
     #Get the last process in the records for each permit in progress.
     
     #Sort values by 'JOBID' and 'DATECOMPLETEDHOUR'. Drop duplicates and keep the last instance.
-    df_status = df2_fil.sort_values(by=['JOBID', 'DATECOMPLETEDHOUR']).drop_duplicates(subset='JOBID', keep='last')
+    df_status = filtered_df2_IP.sort_values(by=['JOBID', 'DATECOMPLETEDHOUR']).drop_duplicates(subset='JOBID', keep='last')
     #print(df_status['OUTCOME'].unique())
-    df_null = df_status[df_status['Status'].isnull()]
-    print(df_null[['OBJECTDEFDESCRIPTION', 'OUTCOME']])
+    #df_null = df_status[df_status['Status'].isnull()]
+    #print(df_null[['OBJECTDEFDESCRIPTION', 'OUTCOME']])
+    
     # Plot alternative
-    fig1 = px.histogram(df_status, x='pools', color= 'Status',
+    figStatusIP = px.histogram(df_status, x='pools', color= 'Status',
                         category_orders={"Status": ["1.Intake Review", 
                                                     "2.Intake - Payment and/or More Info Requested", 
                                                     "3.With DO or Pending Planning and Zoning Review", 
@@ -677,7 +761,7 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
                                                     "6.More Info Requested - Plans Examination Review",
                                                     ],} #"8.Plans Revision Intake Review"
                         )
-    fig1.update_layout(template='plotly',
+    figStatusIP.update_layout(template='plotly',
                           title_x=0.2,
                           xaxis_title='Today',
                           yaxis_title='Volume of applications',
@@ -690,35 +774,37 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
     # BAR PLOT STATUSDESCRIPTION
 
     # Figure 2: Bar plot for STATUSDESCRIPTION Volume. Source: df_statusdescription.
-    df_statusdescription = df1_fil['STATUSDESCRIPTION'].value_counts().to_frame()
-    fig2 = px.bar(df_statusdescription, x=df_statusdescription.index, y='STATUSDESCRIPTION')
-    fig2.update_xaxes(title='', tickangle=40, automargin=True, tickwidth=0.5)
-    fig2.update_layout(template='plotly',
+    df_statusdescription = filtered_df1_IP['STATUSDESCRIPTION'].value_counts().to_frame()
+    figStatusDescription = px.bar(df_statusdescription, x=df_statusdescription.index, y='STATUSDESCRIPTION')
+    figStatusDescription.update_xaxes(title='', tickangle=40, automargin=True, tickwidth=0.5)
+    figStatusDescription.update_layout(template='plotly',
                           title_x=0.2,
                           xaxis_title='',
                           yaxis_title='Volume of applications')
 
     # -----------------------------------------------------------------------------
 
-    df1_fil = df1_fil.merge(df_status[['JOBID', 'DATECOMPLETEDHOUR']], on='JOBID', how='left')
-    df1_fil['status_duration'] = (df1_fil['DATECOMPLETEDHOUR'] - df1_fil['RECEIVEDDATE']).dt.days
-    test = df1_fil[df1_fil['STATUSDESCRIPTION']=='Intake Review']
-    test = test.sort_values(by='status_duration')
+    # BAR PLOT for duration of applications in certain status
+    filtered_df1_IP = filtered_df1_IP.merge(df_status[['JOBID', 'DATECOMPLETEDHOUR']], on='JOBID', how='left')
+    filtered_df1_IP['status_duration'] = (filtered_df1_IP['DATECOMPLETEDHOUR'] - filtered_df1_IP['RECEIVEDDATE']).dt.days
+    #test = df1_fil[df1_fil['STATUSDESCRIPTION']=='Intake Review']
+    #test = test.sort_values(by='status_duration')
     #print(test[['JOBID', 'STATUSDESCRIPTION', 'RECEIVEDDATE', 'DATECOMPLETEDHOUR', 'status_duration']].tail(10))
+    
     # Create figure with secondary y-axis
-    fig3 = make_subplots(specs=[[{"secondary_y": True}]])
-    fig3.add_trace(
-        go.Box(x=df1_fil['STATUSDESCRIPTION'], y=df1_fil['status_duration'], name="Status duration", marker=dict(color='royalblue')),
-        secondary_y=False,)   
-    fig3.update_xaxes(categoryorder='array', categoryarray= df_statusdescription.index, 
+    figStatusDuration = make_subplots(specs=[[{"secondary_y": True}]])
+    figStatusDuration.add_trace(
+        go.Box(x=filtered_df1_IP['STATUSDESCRIPTION'], y=filtered_df1_IP['status_duration'], 
+               name="Status duration", marker=dict(color='royalblue')), secondary_y=False,)   
+    figStatusDuration.update_xaxes(categoryorder='array', categoryarray= df_statusdescription.index, 
                        tickangle=40, automargin=True, tickwidth=0.5) 
-    fig3.add_trace(go.Scatter(x= df_statusdescription.index, y= df_statusdescription['STATUSDESCRIPTION'],
+    figStatusDuration.add_trace(go.Scatter(x= df_statusdescription.index, y= df_statusdescription['STATUSDESCRIPTION'],
                         mode='lines+markers', name='Volume', line=dict(color='darkblue', width=2)),
                         secondary_y=True,)
     # Set y-axes titles
-    fig3.update_yaxes(title_text="'Received date' to 'Last updated date'", secondary_y=False)
-    fig3.update_yaxes(title_text="Volume of Applications", secondary_y=True)
-    fig3.update_layout(template='plotly',
+    figStatusDuration.update_yaxes(title_text="'Received date' to 'Last updated date'", secondary_y=False)
+    figStatusDuration.update_yaxes(title_text="Volume of Applications", secondary_y=True)
+    figStatusDuration.update_layout(template='plotly',
                       title_x=0.3,
                       font=dict(
                         size=10,),
@@ -736,36 +822,25 @@ def update_graph(start_date, end_date, target_name, pool_name, process_name, sli
     # VOLUME OF APPLICATIONS
 
     # Figure 4: Volume of Applications grouped by week received.
-    df_index = df1_fil.set_index('RECEIVEDDATE')
-    df_week = df_index.resample('w').agg({"JOBID": "count"}).reset_index()
-    fig4 = px.bar(df_week, x='RECEIVEDDATE', y='JOBID')
-    fig4.update_layout(template='plotly',
+    filtered_df1_IP_received_index = filtered_df1_IP.set_index('RECEIVEDDATE')
+    filtered_df1_IP_week_index = filtered_df1_IP_received_index.resample('w').agg({"JOBID": "count"}).reset_index()
+    figVolByWeek = px.bar(filtered_df1_IP_week_index, x='RECEIVEDDATE', y='JOBID')
+    figVolByWeek.update_layout(template='plotly',
                           title_x=0.2,
                           xaxis_title='Week received',
                           yaxis_title='Volume of applications')
     
     # return outputs
-    outputs = [figPools, figAvgPERResourcesPools,
-               weeks_kpis_text, gauge_vol, gauge_duration, gauge_permits_issued, gauge_resources, avg_rate, gauge_newVol, avg_duration, 
-               fig1, fig2, fig3, fig4, slider_permits_text, slider_weeks_text, avg_duration_weeks]
+    outputs = [figVolumeByPools, gauge_vol, 
+               figStatusIP, figStatusDescription, figStatusDuration, figVolByWeek]
     
     return outputs
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # --------------------------------------------------------------------------------------------------------------------------------------
+# Callbacks for Forecast
+
 # sklearn packages
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
@@ -795,7 +870,7 @@ def Forecast(test, features, target, fitmodel):
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 from app import app
-from apps.app_BP_issued.df_BP_issued import df, df2, df_duration
+#from apps.app_BP_issued.df_BP_issued import df, df2, df_duration
 
 #Helper function to filer dataframe
 def filter(df, column, filter):
@@ -853,23 +928,32 @@ def SetFeatures(dataset, target_name):
      Input(component_id='IPpool-name', component_property='value'),
      Input(component_id='slider-resources-per', component_property='value'),
      Input(component_id='slider-rate-per', component_property='value'),
-     Input(component_id='gauge-newVol', component_property='value'),],
+     Input(component_id='avg-newVol', component_property='value'),],
 )
 
-def update_graph(target_name, pool_name, resources, rate, newVol):
+def update_forecast(target_name, pool_name, resources, rate, newVol):
     #The arguments of the function depend on the number of inputs of the callback
 
+    # Import issued data
+    datasets = json.loads(getPermitsIssuedAsJson(file_location_1, file_location_2))
+
+    # Load permits issued dfs
+    #df1_issued = pd.read_json(datasets["df1_issued"], convert_dates=['RECEIVEDDATE', 'ISSUEDATE'], orient='split')
+    df2_issued = pd.read_json(datasets["df2_issued"], convert_dates=['RECEIVEDDATE', 'DATECOMPLETEDHOUR', 'ISSUEDATE'], orient='split')
+    df_duration_issued = pd.read_json(datasets["df_duration_issued"], convert_dates=['RECEIVEDDATE', 'ISSUEDATE'], orient='split')
+
+    df_duration_issued_received_index = df_duration_issued.set_index('RECEIVEDDATE')
     
     # Filter by pool_name
-    filtered_dff = filter(df, 'pools', pool_name)
-    filtered_dff2 = filter(df2, 'pools', pool_name)
+    filtered_dff = filter(df_duration_issued_received_index, 'pools', pool_name)
+    filtered_dff2 = filter(df2_issued, 'pools', pool_name)
 
     #------------------------------------------------------------------------------------
     # VOLUME OF NEW APPLICATIONS |  MEDIAN TIME DURATIONS | ISSUED APPLICATIONS
 
     # 1. Calculate Volume of New Applications per Week. Consider all applications (Complete and Incomplete).
     df_newVol = filtered_dff.resample('w').agg({"JOBID":'nunique'})
-    newVol = df_newVol.tail(12)['JOBID'].mean()
+    #newVol = df_newVol.tail(12)['JOBID'].mean()
 
     # 2. Calculate median time duration of Applications per Week. .
     filtered_dff = filtered_dff[filtered_dff[target_name]>=0] # Remove applications with negative durations
@@ -887,13 +971,13 @@ def update_graph(target_name, pool_name, resources, rate, newVol):
     df2_per = filtered_dff2[filtered_dff2['OBJECTDEFDESCRIPTION']==process]
 
     # Match JOBIDs with df_duration. Contains "Enter Application" and "Plans Examination Review".
-    JOBIDs_duration = df_duration['JOBID'].unique().tolist()
+    JOBIDs_duration = filtered_dff['JOBID'].unique().tolist()
     df2_per = df2_per[df2_per['JOBID'].isin(JOBIDs_duration)]
 
     # Calculate unique No. of Active PER Resources per Week, and unique No. of PER process per Week.
     df2_peri = df2_per.set_index('DATECOMPLETEDHOUR')
     df_featuresPER = df2_peri.groupby([pd.Grouper(freq='w')]).agg({"COMPLETEDBY": "nunique", "JOBID": "nunique"})
-    AVGresourcesPER = round(df_featuresPER.tail(12)['COMPLETEDBY'].mean())
+    #AVGresourcesPER = round(df_featuresPER.tail(12)['COMPLETEDBY'].mean())
 
     #------------------------------------------------------------------------------------
     #INTAKE - RESOURCES & SPEED
@@ -903,7 +987,7 @@ def update_graph(target_name, pool_name, resources, rate, newVol):
     df2_intake = filtered_dff2[filtered_dff2['OBJECTDEFDESCRIPTION']==process]
 
     # Match JOBIDs with "Enter Application" and "Plans Examination Review".
-    JOBIDs_duration = df_duration['JOBID'].unique().tolist()
+    #JOBIDs_duration = df_duration['JOBID'].unique().tolist()
     df2_intake = df2_intake[df2_intake['JOBID'].isin(JOBIDs_duration)]
  
     # Calculate unique No. of Active INTAKE Resources per Week, total No. of INTAKE process per Week, unique No. of INTAKE process per Week.
@@ -980,51 +1064,7 @@ def update_graph(target_name, pool_name, resources, rate, newVol):
     #test = dataset[~msk]
     #train_size = int(len(dataset) * 0.8)
     #train = dataset.head(train_size)
-
-    #features = ['resources', 'total_PER', 'issued_applications', 'new_applications', 'queueAll'] #'unique_PER'
-    #features = ['resources', 'issued_applications', 'new_applications', 
-    #            'Enter Application', 'More Info Requested - Intake', 'More Info Requested - Plans Examination Review']
-    # features = ['resourcesINTAKE', 'speedINTAKE', 'resourcesPER', 'speedPER', 
-    #             'issued_applications', 'new_applications', 
-    #             "1.Intake Review", 
-    # #             "2.Intake - Payment and/or More Info Requested", 
-    # #             "3.With DO or Pending Planning and Zoning Review", 
-    # #             "4.To Be Assigned",
-    # #             "5.In Plans Examination",
-    # #             "6.More Info Requested - Plans Examination Review",
-    # #             "8.Plans Revision Intake Review"]
-    # #print(target_name)
-    # slider_resources_text = "Resources at PER:"
-    # slider_rate_text = "Rate at PER:"
-    # features_team = ['productivity_PER',]
-    # features_queue = ["1.Intake Review", 
-    #                   "2.Intake - Payment and/or More Info Requested", 
-    #                   "3.With DO or Pending Planning and Zoning Review", 
-    #                   "4.To Be Assigned",
-    #                   "5.In Plans Examination",
-    #                 ]
-    # if target_name == "project_duration_Enter_to_Intake_fi":
-    #     target_segment_text = 'Target segment: "Enter Application" to "Intake Review: first instance"'
-    #     slider_resources_text = "Resources at INTAKE:"
-    #     slider_rate_text = "Rate at INTAKE:"
-    #     features_team = ['productivity_INTAKE',]
-    #     features_queue = ["1.Intake Review", 
-    #                       "2.Intake - Payment and/or More Info Requested",
-    #                     ]
-    # elif  target_name == "project_duration_Intake_li_to_PER_fi":
-    #     target_segment_text = 'Target segment: "Intake Review: last instance" to "Plans Examination Review: first instance"'
-    #     features_queue = ["3.With DO or Pending Planning and Zoning Review", 
-    #                       "4.To Be Assigned",
-    #                       "5.In Plans Examination",]
-    # elif target_name == "project_duration_Enter_to_PER_fi":
-    #     target_segment_text = 'Target segment: "Enter Application" to "Plans Examination Review: first instance"'
-    # else:
-    #     target_segment_text = 'Target segment: "Enter Application" to "Issue Date"'
-
-    
-    
-    
-
+ 
     # -----------------------------------------------------------------------------
     # Fit Model
     regr, regr.coef_ = FitModel(train, features, target)
@@ -1034,15 +1074,23 @@ def update_graph(target_name, pool_name, resources, rate, newVol):
     #y_hat = regr.predict(df_inProgress[features])
 
     # -----------------------------------------------------------------------------
-    # Get Inputs for Forecast
-    df1_fil = df1[df1['pools']==pool_name]
-    JOBIDs_df1_fil = df1_fil['JOBID'].unique().tolist() # Unique Applications in progress.
-    df2_fil =  df2_IP[df2_IP['JOBID'].isin(JOBIDs_df1_fil)] # Match JOBIDs in Projects with Processes table.
+    # Import Permits in progress
+    datasets = json.loads(getPermitsInProgressAsJson(file_location_1, file_location_2))
+
+    # Load df1_inProgress & df2_inProgress
+    df1_inProgress = pd.read_json(datasets["df1_inProgress"], orient='split')
+    df2_inProgress = pd.read_json(datasets["df2_inProgress"], orient='split')
+
+    # Filter by pool_name
+    filtered_df1_inProgress = df1_inProgress[df1_inProgress['pools']==pool_name]
+    JOBIDs_filtered_df1_inProgress = filtered_df1_inProgress['JOBID'].unique().tolist() # Unique Applications in progress.
+    filtered_df2_inProgress =  df2_inProgress[df2_inProgress['JOBID'].isin(JOBIDs_filtered_df1_inProgress)] # Match JOBIDs in Projects with Processes table.
     
+    # Get Inputs for Forecast. Status of Applications in progress
     #Get the last process in the records for each permit in progress.
     df_dic = pd.DataFrame()
     #Sort values by 'JOBID' and 'DATECOMPLETEDHOUR'. Drop duplicates and keep the last instance.
-    df_status = df2_fil.sort_values(by=['JOBID', 'DATECOMPLETEDHOUR']).drop_duplicates(subset='JOBID', keep='last')
+    df_status = filtered_df2_inProgress.sort_values(by=['JOBID', 'DATECOMPLETEDHOUR']).drop_duplicates(subset='JOBID', keep='last')
     #Transpose (T function) df and get values as dict to append to new df.
     dic =  df_status.groupby(['Status']).agg({'JOBID':'count'}).T.to_dict(orient='list')
     #Append all info together
@@ -1050,9 +1098,14 @@ def update_graph(target_name, pool_name, resources, rate, newVol):
     #df_dic = df_dic[['Enter Application', 'More Info Requested - Intake', 'More Info Requested - Plans Examination Review']]
     df_features_queue = df_dic[features_queue]
 
+    # Get other inputs: productivity...
     productivity = resources*rate
     forecast_features = [productivity]
+    
+    # Add all inputs together
     forecast_features.extend(df_features_queue.values.tolist()[0])
+    
+    # Forecast based on relevant input features
     y_hat = regr.predict(np.array([forecast_features]))
     #print(y_hat)
     forecast = str(round(y_hat.item())) + ' days' 
